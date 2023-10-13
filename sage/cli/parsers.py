@@ -2,9 +2,11 @@ import sys
 import re
 
 from abc import ABC, abstractmethod
+from typing import Any
 from rdflib.namespace import XSD
 from rdflib.term import Literal, BNode, URIRef
-from rdflib.plugins.parsers.ntriples import NTriplesParser, unquote, uriquote
+from rdflib.plugins.parsers.ntriples import unquote, uriquote
+from rdflib.plugins.parsers.ntriples import W3CNTriplesParser as NTriplesParser
 
 uriref = r'<([^:]+:[^\s"<>]*)>'
 literal = r'"([^"\\]*(?:\\.[^"\\]*)*)"'
@@ -149,8 +151,8 @@ class HDTParser(CustomNTriplesParser):
 
         from hdt import HDTDocument
 
-        doc = HDTDocument(file_path, indexed=False)
-        iterator, _ = doc.search_triples("", "", "")
+        self.hdt = HDTDocument(file_path, indexed=False)
+        iterator, _ = self.hdt.search_triples("", "", "")
         self.iterator = iterator
         self.parse()
 
@@ -168,6 +170,23 @@ class HDTParser(CustomNTriplesParser):
         except StopIteration:
             return None
 
+    def __iter__(self):
+        self.iterator, _ = self.hdt.search_triples("", "", "")
+        return self
+    
+    def __next__(self):
+        try:
+            (subject, predicate, object) = next(self.iterator)
+            print(subject, predicate, object)
+            if subject.startswith('http'):
+                subject = f'<{subject}>'
+            if predicate.startswith('http'):
+                predicate = f'<{predicate}>'
+            if object.startswith('http'):
+                object = f'<{object}>'
+            return subject, predicate, object
+        except StopIteration:
+            raise StopIteration 
 
 class ParserFactory():
 
