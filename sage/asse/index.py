@@ -14,6 +14,7 @@ from tqdm import tqdm
 import gzip
 import faiss
 import codecs
+from yaml import load, FullLoader
 
 from sage.cli.parsers import ParserFactory
 
@@ -30,9 +31,10 @@ def load_entity(file):
     parser.parsefile(file)
 
     entities = set()
-    for h, r, t in parser.readlines():
-        entities.add(h)
-        entities.add(t)
+    print('load entity')
+    for s, p, o in parser:
+        entities.add(s)
+        entities.add(o)
     
     return entities
 
@@ -62,9 +64,9 @@ def write(cur_offset, offsets, fp, ent_batch, embeddings):
 @click.command()
 @click.argument("config")
 def build_index(config):
-    with open(config) as f:
-        config = json.load(f)
-    file = config['file']
+    config = load(open(config), Loader=FullLoader)
+    print(config)
+    file = config['graphs'][0]['file']
     entities = load_entity(file)
 
     ctx_encoder = DPRContextEncoder.from_pretrained(
@@ -79,6 +81,8 @@ def build_index(config):
     offsets = []
     vectors = []
     entities = sorted(list(entities))
+    if not os.path.exists(os.path.dirname(output_path)):
+        os.makedirs(os.path.dirname(output_path))
     with gzip.open(output_path, 'wb') as fp:
         for i in tqdm(range(0, len(entities), batch_size)):
             ent_batch = entities[i:i+batch_size]
