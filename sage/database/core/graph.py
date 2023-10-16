@@ -6,6 +6,7 @@ from typing import List, Optional, Tuple
 
 from sage.database.db_connector import DatabaseConnector
 from sage.database.db_iterator import DBIterator
+from sage.asse.database.approx import DatabaseConnectorWithApproxSearch
 
 
 class Graph(object):
@@ -21,7 +22,7 @@ class Graph(object):
       * default_queries: List of queries that can be executed with this graph.
     """
 
-    def __init__(self, uri: str, name: str, description: str, connector: DatabaseConnector, quantum=75, max_results=inf, default_queries: List[dict] = list()):
+    def __init__(self, uri: str, name: str, description: str, connector: DatabaseConnectorWithApproxSearch, quantum=75, max_results=inf, default_queries: List[dict] = list()):
         super(Graph, self).__init__()
         self._uri = uri
         self._name = name
