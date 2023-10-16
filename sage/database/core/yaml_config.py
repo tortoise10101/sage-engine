@@ -24,13 +24,18 @@ def load_config(config_file: str) -> Dataset:
     config = load(open(config_file), Loader=FullLoader)
 
     # available backends (populated with sage's native backends)
-    backends = builtin_backends()
+    backends, approxs = builtin_backends()
     # build custom backend (if there is some)
     if 'backends' in config and len(config['backends']) > 0:
         for b in config['backends']:
             if 'name' not in b or 'path' not in b or 'connector' not in b or 'required' not in b:
                 raise SyntaxError('Invalid backend declared. Each custom backend must be declared with properties "name", "path", "connector" and "required"')
             backends[b['name']] = import_backend(b['name'], b['path'], b['connector'], b['required'])
+    if 'approx' in config and len(config['approx']) > 0:
+        for a in config['approx']:
+            if 'name' not in a or 'path' not in a or 'connector' not in a or 'required' not in a:
+                raise SyntaxError('Invalid backend declared. Each custom backend must be declared with properties "name", "path", "connector" and "required"')
+            approxs[a['name']] = import_backend(a['name'], a['path'], a['connector'], a['required'])
 
     # load dataset basic informations
     dataset_name = config["name"]
@@ -91,10 +96,15 @@ def load_config(config_file: str) -> Dataset:
             g_connector = backends[g_config["backend"]](g_config)
         else:
             logging.error(f"Impossible to find the backend with name {g_config['backend']}, declared for the RDF Graph {g_name}")
-            continue
+            raise
+        if "approx" in g_config and g_config["approx"] in approxs:
+            a_connector = approxs[g_config["approx"]](g_config, exact_backend=g_connector)
+        else:
+            logging.error(f"Impossible to find the backend with name {g_config['backend']}, declared for the RDF Graph {g_name}")
+            raise
 
         # build the graph and register it using its URI
-        graphs[g_uri] = Graph(g_uri, g_name, g_description, g_connector, quantum=g_quantum, max_results=g_max_results, default_queries=g_queries)
+        graphs[g_uri] = Graph(g_uri, g_name, g_description, a_connector, quantum=g_quantum, max_results=g_max_results, default_queries=g_queries)
         logging.info(f"RDF Graph '{g_name}' (backend: {g_config['backend']}) successfully loaded")
 
     return Dataset(dataset_name, dataset_description, graphs, public_url=public_url, default_query=default_query, analytics=analytics, stateless=is_stateless, statefull_manager=statefull_manager)

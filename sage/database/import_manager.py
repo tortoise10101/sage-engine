@@ -4,8 +4,10 @@ from importlib import import_module
 from typing import Callable, Dict, List
 
 from sage.database.db_connector import DatabaseConnector
+from sage.asse.database.approx import DatabaseConnectorWithApproxSearch
 
 BackendFactory = Callable[[Dict[str, str]], DatabaseConnector]
+ApproxFactory = Callable[[Dict[str, str]], DatabaseConnectorWithApproxSearch]
 
 
 def builtin_backends() -> Dict[str, BackendFactory]:
@@ -13,7 +15,17 @@ def builtin_backends() -> Dict[str, BackendFactory]:
 
     Returns: The HDT, PostgreSQL and MVCC-PostgreSQL backends, registered in a dict.
     """
-    data = [
+    approx_data = [
+        {
+            'name': 'random',
+            'path': 'sage.asse.database.random',
+            'connector': 'RandomSearchConnector',
+            'required': [
+                'store',
+            ]
+        }
+    ]
+    exact_data = [
         # HDT backend (read-only)
         {
             'name': 'hdt-file',
@@ -84,7 +96,8 @@ def builtin_backends() -> Dict[str, BackendFactory]:
             ]
         }
     ]
-    return {item['name']: import_backend(item['name'], item['path'], item['connector'], item['required']) for item in data}
+    return {item['name']: import_backend(item['name'], item['path'], item['connector'], item['required']) for item in exact_data}, \
+            {item['name']: import_approx(item['name'], item['path'], item['connector'], item['required']) for item in approx_data}
 
 
 def import_backend(name: str, module_path: str, class_name: str, required_params: List[str]) -> BackendFactory:
@@ -119,4 +132,17 @@ def import_backend(name: str, module_path: str, class_name: str, required_params
             if key not in params:
                 raise SyntaxError(f"Missing required parameters for backend {name}. Expected to see {required_params}")
         return connector.from_config(params)
+    return __factory
+
+def import_approx(name: str, module_path: str, class_name: str, required_params: List[str]) -> ApproxFactory:
+    def __factory(params: Dict[str, str], exact_backend: DatabaseConnector) -> DatabaseConnectorWithApproxSearch:
+        module = import_module(module_path)
+        if not hasattr(module, class_name):
+            raise RuntimeError(f"Connector class {class_name} not found in module {module_path}")
+        connector = getattr(module, class_name)
+        for key in required_params:
+            if key not in params:
+                raise SyntaxError(f"Missing required parameters for backend {name}. Expected to see {required_params}")
+        return connector.from_config(params, exact_backend)
+    
     return __factory
