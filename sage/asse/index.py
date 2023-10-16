@@ -13,17 +13,13 @@ import click
 from tqdm import tqdm
 import gzip
 import faiss
-import codecs
 from yaml import load, FullLoader
 
 from sage.cli.parsers import ParserFactory
+from sage.asse.corpus import gzip_str, gunzip_str
 
 logger = logging.getLogger(__name__)
 device = "cuda" if torch.cuda.is_available() else "cpu"
-
-def gzip_str(str):
-    return codecs.encode(str.encode('utf-8'), 'zlib')
-    # return gzip.compress(str.encode('utf-8'))
 
 def load_entity(file):
     format = file.split('.')[-1]
@@ -31,9 +27,10 @@ def load_entity(file):
     parser.parsefile(file)
 
     entities = set()
-    print('load entity')
     for s, p, o in parser:
         entities.add(s)
+        if '"' in o:
+            continue
         entities.add(o)
     
     return entities
@@ -75,7 +72,7 @@ def build_index(config):
     ctx_tokenizer = DPRContextEncoderTokenizerFast.from_pretrained(
         config['model'])
     
-    output_path = os.path.join(config['store'], f'embed/embed.json.gz.records')
+    output_path = os.path.join(config['store'], f'embed/passages_1_of_1.json.gz.records')
     batch_size = 64
     cur_offset = 0
     offsets = []
@@ -83,21 +80,27 @@ def build_index(config):
     entities = sorted(list(entities))
     if not os.path.exists(os.path.dirname(output_path)):
         os.makedirs(os.path.dirname(output_path))
-    with gzip.open(output_path, 'wb') as fp:
+    # with gzip.open(output_path, 'wb') as fp:
+    with open(output_path, 'wb') as fp:
         for i in tqdm(range(0, len(entities), batch_size)):
             ent_batch = entities[i:i+batch_size]
             embeddings = embed_entity(ent_batch, ctx_encoder, ctx_tokenizer)
             cur_offset = write(cur_offset, offsets, fp, ent_batch, embeddings)
             vectors.append(embeddings)
         ent_batch = entities[i:]
-        embeddings = embed_entity(ent_batch, ctx_encoder, ctx_tokenizer)
-        cur_offset = write(cur_offset, offsets, fp, ent_batch, embeddings)
+        if len(ent_batch) > 0:
+            embeddings = embed_entity(ent_batch, ctx_encoder, ctx_tokenizer)
+            cur_offset = write(cur_offset, offsets, fp, ent_batch, embeddings)
         vectors.append(embeddings)
+        offsets.append(cur_offset)
 
     output_file = os.path.join(config['store'], f'embed/vector.npy')
     with open(output_file, 'wb') as f:
         np.save(f, np.array(offsets, dtype=np.int64), allow_pickle=False)
     
+    with open(os.path.join(config['store'], f'embed/offsets_{1}_of_{1}.npy'), 'wb') as f:
+        np.save(f, np.array(offsets, dtype=np.int64), allow_pickle=False)
+
     if config['scalar_quantizer'] > 0:
         if config['scalar_quantizer'] == 16:
             sq = faiss.ScalarQuantizer.QT_fp16
