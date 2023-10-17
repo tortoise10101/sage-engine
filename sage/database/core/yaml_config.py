@@ -98,7 +98,7 @@ def load_config(config_file: str) -> Dataset:
             logging.error(f"Impossible to find the backend with name {g_config['backend']}, declared for the RDF Graph {g_name}")
             raise
         if "approx" in g_config and g_config["approx"] in approxs:
-            a_connector = approxs[g_config["approx"]](g_config, exact_backend=g_connector)
+            a_connector = approxs[g_config["approx"]](config, exact_backend=g_connector)
         else:
             logging.error(f"Impossible to find the backend with name {g_config['backend']}, declared for the RDF Graph {g_name}")
             raise

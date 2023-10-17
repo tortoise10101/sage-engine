@@ -23,6 +23,13 @@ def builtin_backends() -> Dict[str, BackendFactory]:
             'required': [
                 'store',
             ]
+        },
+        {
+            'name': 'dpr',
+            'path': 'sage.asse.database.dpr',
+            'connector': 'DensePassageRetrievalConnector',
+            'required': [
+            ]
         }
     ]
     exact_data = [
