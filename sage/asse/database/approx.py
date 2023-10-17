@@ -70,32 +70,32 @@ class DatabaseConnectorWithApproxSearch(DatabaseConnector):
 
     def start_transaction(self) -> None:
         """Start a transaction (if supported by this type of connector)"""
-        pass
+        self.exact.start_transaction()
 
     def commit_transaction(self) -> None:
         """Commit any ongoing transaction (if supported by this type of connector)"""
-        pass
+        self.exact.commit_transaction()
 
     def abort_transaction(self) -> None:
         """Abort any ongoing transaction (if supported by this type of connector)"""
-        pass
+        self.exact.abort_transaction()
 
     @property
     def nb_triples(self) -> int:
         """Get the number of RDF triples in the database"""
-        return 0
+        return self.exact.nb_triples
 
     @property
     def nb_subjects(self) -> int:
         """Get the number of subjects in the database"""
-        return 0
+        return self.exact.nb_subjects
 
     @property
     def nb_predicates(self) -> int:
         """Get the number of predicates in the database"""
-        return 0
+        return self.exact.nb_predicates
 
     @property
     def nb_objects(self) -> int:
         """Get the number of objects in the database"""
-        return 0
+        return self.exact.nb_objects
