@@ -1,0 +1,16 @@
+name: SaGe yago  
+maintainer: aaa
+quota: 75
+max_results: 2000
+model: facebook/dpr-ctx_encoder-multiset-base
+store: store/WN18RR_v3
+embed_dim: 768
+scalar_quantizer: -1
+graphs:
+-
+  name: test
+  uri: http://example.org
+  description: DBPedia
+  backend: hdt-file
+  approx: dpr
+  file: kg/WN18RR_v3/train.hdt
