@@ -1,5 +1,4 @@
 from datetime import datetime
-import random
 from typing import Optional, Tuple
 from transformers import AutoTokenizer, AutoModel
 import torch
