@@ -104,7 +104,8 @@ def load_config(config_file: str) -> Dataset:
             raise
 
         # build the graph and register it using its URI
-        graphs[g_uri] = Graph(g_uri, g_name, g_description, a_connector, quantum=g_quantum, max_results=g_max_results, default_queries=g_queries)
+        graphs[g_uri] = Graph(g_uri, g_name, g_description, g_connector, quantum=g_quantum, max_results=g_max_results, default_queries=g_queries)
+        graphs[f'approx-{g_uri}'] = Graph(g_uri, g_name, g_description, a_connector, quantum=g_quantum, max_results=g_max_results, default_queries=g_queries)
         logging.info(f"RDF Graph '{g_name}' (backend: {g_config['backend']}) successfully loaded")
 
     return Dataset(dataset_name, dataset_description, graphs, public_url=public_url, default_query=default_query, analytics=analytics, stateless=is_stateless, statefull_manager=statefull_manager)

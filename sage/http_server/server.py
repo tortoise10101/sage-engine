@@ -32,6 +32,7 @@ class SagePostQuery(BaseModel):
     query: str = Field(..., description="The SPARQL query to execute.")
     defaultGraph: str = Field(..., description="The URI of the default RDF graph queried.")
     next: str = Field(None, description="(Optional) A next link used to resume query execution from a saved state.")
+    is_asse: bool = Field(False, description="Is the query executed on ASSE?")
 
 
 def choose_void_format(mimetypes):
@@ -46,6 +47,90 @@ def choose_void_format(mimetypes):
     elif "application/json" in mimetypes or "application/json+ld" in mimetypes:
         return "json-ld", "application/json"
     return "ntriples", "application/n-triples"
+
+
+async def execute_query_on_asse(query: str, default_graph_uri: str, next_link: Optional[str], dataset: Dataset) -> Tuple[List[Dict[str, str]], Optional[str], Dict[str, str]]:
+    """Execute a query using the SageEngine and returns the appropriate HTTP response.
+
+    Any failure will results in a rollback/abort on the current query execution.
+
+    Args:
+      * query: SPARQL query to execute.
+      * default_graph_uri: URI of the default RDF graph to use.
+      * next_link: URI to a saved plan. Can be `None` if query execution should starts from the beginning.
+      * dataset: RDF dataset on which the query is executed.
+
+    Returns:
+      A tuple (`bindings`, `next_page`, `stats`) where:
+      * `bindings` is a list of query results.
+      * `next_page` is a link to saved query execution state. Sets to `None` if query execution completed during the time quantum.
+      * `stats` are statistics about query execution.
+
+    Throws: Any exception that have occured during query execution.
+    """
+    graph = None
+    try:
+        if not dataset.has_graph(default_graph_uri):
+            raise HTTPException(status_code=404, detail=f"RDF Graph {default_graph_uri} not found on the server.")
+        graph = dataset.get_graph(f'approx-{default_graph_uri}')
+
+        context = dict()
+        context['quantum'] = graph.quota
+        context['max_results'] = graph.max_results
+
+        # decode next_link or build query execution plan
+        cardinalities = dict()
+        start = time()
+        if next_link is not None:
+            if dataset.is_stateless:
+                saved_plan = next_link
+            else:
+                saved_plan = dataset.statefull_manager.get_plan(next_link)
+            plan = load(decode_saved_plan(saved_plan), dataset, context)
+        else:
+            plan, cardinalities = parse_query(query, dataset, default_graph_uri, context)
+        
+        print("Plan", plan)
+        print("Cardinalities", cardinalities)
+        logging.info(f'loading time: {(time() - start) * 1000}ms')
+        loading_time = (time() - start) * 1000
+
+        # execute query
+        engine = SageEngine()
+        bindings, saved_plan, is_done, abort_reason = await engine.execute(plan, context)
+
+        # commit or abort (if necessary)
+        if abort_reason is not None:
+            graph.abort()
+            raise HTTPException(status_code=500, detail=f"The SPARQL query has been aborted for the following reason: '{abort_reason}'")
+        else:
+            graph.commit()
+
+        start = time()
+        # encode saved plan if query execution is not done yet and there was no abort
+        next_page = None
+        if (not is_done) and abort_reason is None:
+            next_page = encode_saved_plan(saved_plan)
+            if not dataset.is_stateless:
+                # generate the plan ID if this is the first time we execute this plan
+                plan_id = next_link if next_link is not None else str(uuid4())
+                dataset.statefull_manager.save_plan(plan_id, next_page)
+                next_page = plan_id
+        elif is_done and (not dataset.is_stateless) and next_link is not None:
+            # delete the saved plan, as it will not be reloaded anymore
+            dataset.statefull_manager.delete_plan(next_link)
+
+        logging.info(f'export time: {(time() - start) * 1000}ms')
+        exportTime = (time() - start) * 1000
+        stats = {"cardinalities": cardinalities, "import": loading_time, "export": exportTime}
+
+        return (bindings, next_page, stats)
+    except Exception as err:
+        # abort all ongoing transactions, then forward the exception to the main loop
+        logging.error(traceback.format_exc())
+        if graph is not None:
+            graph.abort()
+        raise err
 
 
 async def execute_query(query: str, default_graph_uri: str, next_link: Optional[str], dataset: Dataset) -> Tuple[List[Dict[str, str]], Optional[str], Dict[str, str]]:
@@ -214,7 +299,13 @@ def run_app(config_file: str) -> FastAPI:
             mimetypes = request.headers['accept'].split(",")
             server_url = urlunparse(request.url.components[0:3] + (None, None, None))
             exec_start = time()
-            bindings, next_page, stats = await execute_query(item.query, item.defaultGraph, item.next, dataset)
+            print("Log info", item.query)
+            if item.is_asse is True:
+                print("ASSE")
+                bindings, next_page, stats = await execute_query_on_asse(item.query, item.defaultGraph, item.next, dataset)
+            else:
+                print("NOT ASSE")
+                bindings, next_page, stats = await execute_query(item.query, item.defaultGraph, item.next, dataset)
             logging.info(f'query execution time: {(time() - exec_start) * 1000}ms')
             serialization_start = time()
             response = create_response(mimetypes, bindings, next_page, stats, server_url)
