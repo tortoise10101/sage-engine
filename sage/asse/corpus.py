@@ -5,6 +5,7 @@ import os
 import mmap
 import codecs
 import gzip
+from datasets import Dataset
 
 
 def gzip_str(str):
@@ -17,6 +18,18 @@ def gunzip_str(bytes):
     # return gzip.decompress(bytes).decode('utf-8')
 
 
+
+class Corpus:
+    def __init__(self, dir):
+        dir = os.path.join(dir, 'embed')
+        self.data = Dataset.load_from_disk(dir)
+    
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, index):
+        return self.data[index]
+'''
 class Corpus:
     def __init__(self, dir):
         # for every file like 'passagesX.json.gz.records' there must be a file offsetsX.npy
@@ -75,3 +88,4 @@ class Corpus:
             mm.close()
         for file in self.files:
             file.close()
+'''
