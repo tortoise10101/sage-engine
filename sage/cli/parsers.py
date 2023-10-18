@@ -145,6 +145,7 @@ class HDTParser(CustomNTriplesParser):
     def __init__(self, bucket_size):
         super(HDTParser, self).__init__(bucket_size)
         self.iterator = None
+        self.card = 0
 
     def parsefile(self, file_path):
         """Parse an HDT file as an N-Triples file."""
@@ -152,9 +153,10 @@ class HDTParser(CustomNTriplesParser):
         from hdt import HDTDocument
 
         self.hdt = HDTDocument(file_path, indexed=False)
-        iterator, _ = self.hdt.search_triples("", "", "")
+        iterator, card = self.hdt.search_triples("", "", "")
         self.iterator = iterator
         self.parse()
+        self.card = card
 
     def readline(self):
         """Convert triples read from an HDT file into N-Triples."""
@@ -169,6 +171,9 @@ class HDTParser(CustomNTriplesParser):
             return f'{subject} {predicate} {object}.'
         except StopIteration:
             return None
+    
+    def __len__(self):
+        return self.card
 
     def __iter__(self):
         self.iterator, _ = self.hdt.search_triples("", "", "")
@@ -177,7 +182,6 @@ class HDTParser(CustomNTriplesParser):
     def __next__(self):
         try:
             (subject, predicate, object) = next(self.iterator)
-            print(subject, predicate, object)
             if subject.startswith('http'):
                 subject = f'<{subject}>'
             if predicate.startswith('http'):
