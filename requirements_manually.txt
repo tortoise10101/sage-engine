@@ -1,0 +1,10 @@
+ujson
+faiss-cpu
+torch
+torchvision
+torchaudio
+pybind11
+hdt
+rdflib
+transformers
+datasets
